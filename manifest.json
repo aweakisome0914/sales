@@ -1,0 +1,11 @@
+{
+  "name": "焼き鳥 売上報告システム",
+  "short_name": "売上報告",
+  "description": "焼き鳥屋の売上をデータ化するアプリ",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#1a1a2e",
+  "orientation": "portrait",
+  "lang": "ja"
+}
