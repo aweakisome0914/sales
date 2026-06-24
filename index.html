@@ -1,0 +1,1402 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>焼き鳥 売上報告システム</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #1a1a2e;
+      --accent:  #e94560;
+      --sec-a:   #2563eb;
+      --sec-b:   #059669;
+      --sec-c:   #d97706;
+      --bg:      #f1f5f9;
+      --card:    #ffffff;
+      --border:  #e2e8f0;
+      --text:    #1e293b;
+      --muted:   #64748b;
+      --radius:  12px;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Screens ──────────────────────────────────────── */
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* ── Mode selection ───────────────────────────────── */
+    #screen-mode {
+      min-height: 100vh;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 16px;
+      background: var(--primary);
+    }
+    #screen-mode.active { display: flex; }
+
+    .mode-logo { font-size: 56px; margin-bottom: 12px; }
+    .mode-title { font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 6px; }
+    .mode-sub { font-size: 14px; color: #94a3b8; margin-bottom: 48px; }
+
+    .mode-cards {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      justify-content: center;
+      width: 100%;
+      max-width: 560px;
+    }
+    .mode-card {
+      flex: 1;
+      min-width: 200px;
+      background: rgba(255,255,255,0.06);
+      border: 1.5px solid rgba(255,255,255,0.12);
+      border-radius: 16px;
+      padding: 36px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      user-select: none;
+    }
+    .mode-card:hover {
+      background: rgba(255,255,255,0.12);
+      border-color: rgba(255,255,255,0.3);
+      transform: translateY(-3px);
+    }
+    .mode-card .card-icon { font-size: 40px; margin-bottom: 14px; }
+    .mode-card h2 { font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+    .mode-card p { font-size: 13px; color: #94a3b8; }
+    .mode-card.admin-card { border-color: rgba(233,69,96,0.4); }
+    .mode-card.admin-card:hover { border-color: var(--accent); }
+
+    /* ── Staff setup ──────────────────────────────────── */
+    #screen-staff-setup {
+      min-height: 100vh;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 16px;
+      background: var(--primary);
+    }
+    #screen-staff-setup.active { display: flex; }
+
+    .setup-box {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 16px;
+      padding: 36px 28px;
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+    }
+    .setup-box .setup-icon { font-size: 40px; margin-bottom: 16px; }
+    .setup-box h2 { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+    .setup-box p { font-size: 13px; color: #94a3b8; margin-bottom: 24px; }
+
+    .setup-box select {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1.5px solid rgba(255,255,255,0.3);
+      background: #fff;
+      color: var(--text);
+      font-size: 15px;
+      margin-bottom: 16px;
+      appearance: none;
+      cursor: pointer;
+    }
+    .setup-box select option { background: #fff; color: var(--text); }
+
+    /* ── Staff app screen ─────────────────────────────── */
+    #screen-staff.active { display: block; }
+
+    .staff-header {
+      background: var(--primary);
+      color: #fff;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      position: relative;
+    }
+    .staff-header .h-icon { font-size: 24px; }
+    .staff-header .h-store { font-size: 17px; font-weight: 700; flex: 1; }
+    .staff-header .h-mode { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+
+    .staff-menu-btn {
+      background: rgba(255,255,255,0.1);
+      border: none;
+      color: #fff;
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    .staff-menu-btn:hover { background: rgba(255,255,255,0.18); }
+
+    .staff-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 16px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      overflow: hidden;
+      z-index: 100;
+      min-width: 180px;
+      display: none;
+    }
+    .staff-dropdown.open { display: block; }
+    .staff-dropdown-item {
+      padding: 13px 16px;
+      font-size: 14px;
+      color: var(--text);
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+    .staff-dropdown-item:last-child { border-bottom: none; }
+    .staff-dropdown-item:hover { background: var(--bg); }
+    .staff-dropdown-item.danger { color: var(--accent); }
+
+    /* ── Admin app screen ─────────────────────────────── */
+    #screen-admin.active { display: block; }
+
+    .admin-header {
+      background: var(--primary);
+      color: #fff;
+      padding: 18px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .admin-header .h-icon { font-size: 26px; }
+    .admin-header h1 { font-size: 18px; font-weight: 700; flex: 1; }
+    .admin-header p { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+    .admin-badge {
+      background: var(--accent);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+    .switch-mode-btn {
+      background: rgba(255,255,255,0.1);
+      border: none;
+      color: #94a3b8;
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .switch-mode-btn:hover { background: rgba(255,255,255,0.18); color: #fff; }
+
+    .tabs {
+      background: var(--primary);
+      display: flex;
+      padding: 0 20px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+    }
+    .tab {
+      padding: 11px 18px;
+      font-size: 13px;
+      color: #94a3b8;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+      font-weight: 500;
+      user-select: none;
+    }
+    .tab:hover { color: #fff; }
+    .tab.active { color: #fff; border-bottom-color: var(--accent); }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* ── Shared layout ────────────────────────────────── */
+    .container       { max-width: 640px;  margin: 0 auto; padding: 24px 16px; }
+    .container-wide  { max-width: 1000px; margin: 0 auto; padding: 24px 16px; }
+
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .card-header {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 16px; padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-badge {
+      width: 28px; height: 28px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700; color: #fff; flex-shrink: 0;
+    }
+    .badge-a    { background: var(--sec-a); }
+    .badge-b    { background: var(--sec-b); }
+    .badge-c    { background: var(--sec-c); }
+    .badge-info { background: var(--primary); }
+    .card-header h3 { font-size: 14px; font-weight: 600; }
+    .card-hint { font-size: 12px; color: var(--muted); margin-left: auto; }
+
+    /* Staff store chip */
+    .store-chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: #f0f9ff;
+      border: 1.5px solid #bae6fd;
+      color: var(--sec-a);
+      font-size: 16px; font-weight: 700;
+      padding: 10px 16px;
+      border-radius: 10px;
+      width: 100%;
+    }
+    .store-chip .chip-icon { font-size: 18px; }
+
+    .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+    .field:last-child { margin-bottom: 0; }
+    .field label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+    input[type="text"], input[type="date"], select {
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 15px;
+      color: var(--text);
+      background: var(--bg);
+      width: 100%;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      appearance: none;
+    }
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 36px;
+      cursor: pointer;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(233,69,96,0.1);
+      background: #fff;
+    }
+    input.readonly-field {
+      background: #f8fafc; font-weight: 700; cursor: default;
+    }
+    .total-a .readonly-field { color: var(--sec-a); }
+    .total-b .readonly-field { color: var(--sec-b); }
+    .total-c .readonly-field { color: var(--sec-c); }
+    .total-field .readonly-field { font-size: 18px; }
+
+    /* Grand total card */
+    .grand-total-card {
+      background: var(--primary); color: #fff;
+      border-color: var(--primary);
+    }
+    .grand-total-card .card-header { border-bottom-color: rgba(255,255,255,0.15); }
+    .grand-total-card .card-header h3 { color: #fff; }
+    .grand-total-display { text-align: center; padding: 8px 0; }
+    .grand-total-display .amount { font-size: 40px; font-weight: 800; color: #fff; letter-spacing: -1px; }
+    .grand-total-display .label  { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+    .totals-breakdown { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 16px; }
+    .breakdown-item { background: rgba(255,255,255,0.07); border-radius: 8px; padding: 10px; text-align: center; }
+    .breakdown-item .bi-label  { font-size: 11px; color: #94a3b8; margin-bottom: 4px; }
+    .breakdown-item .bi-amount { font-size: 16px; font-weight: 700; }
+    .bi-amount.a { color: #93c5fd; }
+    .bi-amount.b { color: #6ee7b7; }
+    .bi-amount.c { color: #fcd34d; }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 24px; border-radius: 8px;
+      font-size: 14px; font-weight: 600;
+      cursor: pointer; border: none; transition: all 0.2s;
+    }
+    .btn-primary {
+      background: var(--accent); color: #fff;
+      width: 100%; justify-content: center; font-size: 15px; padding: 14px;
+    }
+    .btn-primary:hover { background: #c73652; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(233,69,96,0.4); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-confirm {
+      background: var(--sec-b); color: #fff;
+      width: 100%; justify-content: center; font-size: 15px; padding: 13px;
+    }
+    .btn-confirm:hover { background: #047857; }
+    .btn-export   { background: var(--sec-b); color: #fff; }
+    .btn-export:hover { background: #047857; }
+    .btn-secondary { background: var(--sec-a); color: #fff; }
+    .btn-secondary:hover { background: #1d4ed8; }
+    .btn-ghost {
+      background: rgba(255,255,255,0.08); color: #94a3b8;
+      border: 1px solid rgba(255,255,255,0.15); margin-top: 12px;
+      width: 100%; justify-content: center; font-size: 14px; padding: 11px;
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.15); color: #fff; }
+    .btn-clear { background: var(--border); color: var(--muted); }
+    .btn-clear:hover { background: #cbd5e1; color: var(--text); }
+    .btn-danger {
+      background: transparent; color: var(--accent);
+      border: 1px solid var(--accent); padding: 6px 12px; font-size: 12px;
+    }
+    .btn-danger:hover { background: var(--accent); color: #fff; }
+
+    .action-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+    /* ── Month sections */
+    .month-section { margin-bottom: 24px; }
+    .month-header {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--primary); color: #fff;
+      padding: 12px 18px;
+      border-radius: var(--radius) var(--radius) 0 0;
+    }
+    .month-header .mh-label { font-size: 16px; font-weight: 700; flex: 1; }
+    .month-header .mh-count { font-size: 12px; color: #94a3b8; }
+    .month-header .mh-total { font-size: 18px; font-weight: 800; color: #fff; }
+    .month-section .history-table-wrap { border-radius: 0 0 var(--radius) var(--radius); }
+    tr.month-sum td {
+      background: #f8fafc; font-weight: 700;
+      border-top: 2px solid var(--border);
+      color: var(--primary);
+    }
+
+    /* ── Staff history list */
+    .s-history-item {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg);
+    }
+    .s-history-item:last-child { margin-bottom: 0; }
+    .s-history-date  { font-size: 13px; font-weight: 700; color: var(--text); min-width: 90px; }
+    .s-history-total { font-size: 18px; font-weight: 800; color: var(--primary); flex: 1; }
+    .s-history-sub   { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* Store management */
+    .store-add-row { display: flex; gap: 10px; margin-bottom: 16px; }
+    .store-add-row input { flex: 1; }
+    .store-list { display: flex; flex-direction: column; gap: 12px; }
+    .store-card {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden;
+    }
+    .store-card-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 16px;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+    }
+    .store-item-name { font-size: 15px; font-weight: 700; flex: 1; }
+    .store-item-meta { font-size: 12px; color: var(--muted); }
+    .store-card-body { padding: 14px 16px; }
+    .staff-section-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .staff-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; min-height: 24px; }
+    .staff-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #e0e7ff; color: #3730a3;
+      padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: 600;
+    }
+    .staff-chip-del {
+      background: none; border: none; color: #6366f1; cursor: pointer;
+      font-size: 14px; line-height: 1; padding: 0;
+    }
+    .staff-chip-del:hover { color: var(--accent); }
+    .staff-add-row { display: flex; gap: 8px; }
+    .staff-add-row input { flex: 1; font-size: 14px; padding: 8px 10px; }
+    .staff-add-row button { white-space: nowrap; }
+    .store-card-footer {
+      padding: 10px 16px;
+      border-top: 1px solid var(--border);
+      text-align: right;
+    }
+    .no-stores { text-align: center; padding: 32px; color: var(--muted); font-size: 14px; }
+
+    /* History */
+    .history-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px; flex-wrap: wrap; gap: 10px;
+    }
+    .history-header h2 { font-size: 17px; font-weight: 700; }
+    .record-count { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .filter-row { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: flex-end; }
+    .filter-row .field { margin-bottom: 0; min-width: 160px; }
+    .history-table-wrap {
+      background: var(--card); border-radius: var(--radius);
+      border: 1px solid var(--border); overflow-x: auto;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
+    thead tr { background: #f8fafc; }
+    th {
+      padding: 12px 14px; text-align: left; font-size: 11px;
+      font-weight: 700; color: var(--muted); text-transform: uppercase;
+      letter-spacing: 0.5px; border-bottom: 1px solid var(--border);
+    }
+    td { padding: 11px 14px; border-bottom: 1px solid var(--border); color: var(--text); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; }
+    td.amount { font-weight: 600; font-variant-numeric: tabular-nums; }
+    td.total-col { font-weight: 800; color: var(--primary); }
+
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-state p { font-size: 15px; font-weight: 500; }
+    .empty-state small { font-size: 13px; margin-top: 6px; display: block; }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--text); color: #fff;
+      padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 500;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      transform: translateY(80px); opacity: 0;
+      transition: all 0.3s ease; z-index: 1000; max-width: 300px;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.success { background: var(--sec-b); }
+    .toast.error   { background: var(--accent); }
+
+    @media (max-width: 600px) {
+      .totals-breakdown { grid-template-columns: 1fr; }
+      .grand-total-display .amount { font-size: 32px; }
+      .mode-cards { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════
+     SCREEN 1: Mode Selection
+════════════════════════════════════════════════ -->
+<div id="screen-mode" class="screen">
+  <div class="mode-logo">🍢</div>
+  <div class="mode-title">焼き鳥 売上報告システム</div>
+  <div class="mode-sub">利用するモードを選択してください</div>
+  <div class="mode-cards">
+    <div class="mode-card" onclick="selectMode('staff')">
+      <div class="card-icon">👨‍🍳</div>
+      <h2>スタッフ</h2>
+      <p>売上入力のみ</p>
+    </div>
+    <div class="mode-card admin-card" onclick="selectMode('admin')">
+      <div class="card-icon">👔</div>
+      <h2>管理者</h2>
+      <p>全機能利用可能</p>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+     SCREEN 2: Staff Store Setup
+════════════════════════════════════════════════ -->
+<div id="screen-staff-setup" class="screen">
+  <div class="setup-box">
+    <div class="setup-icon">🏪</div>
+    <h2>あなたの店舗を選択</h2>
+    <p>この端末で使用する店舗を選んでください<br>（一度設定すると変更するまで固定されます）</p>
+    <select id="setupStoreSelect">
+      <option value="">— 店舗を選択 —</option>
+    </select>
+    <button class="btn btn-confirm" onclick="confirmStaffSetup()">✓ この店舗で開始</button>
+    <button class="btn btn-ghost" onclick="showScreen('mode')">← 戻る</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+     SCREEN 3: Staff App
+════════════════════════════════════════════════ -->
+<div id="screen-staff" class="screen">
+  <div class="staff-header">
+    <div class="h-icon">🍢</div>
+    <div style="flex:1">
+      <div class="h-store" id="staffStoreTitle">—</div>
+      <div class="h-mode">スタッフ入力モード</div>
+    </div>
+    <button class="staff-menu-btn" onclick="toggleStaffMenu()">⚙</button>
+    <div class="staff-dropdown" id="staffDropdown">
+      <div class="staff-dropdown-item" onclick="changeStaffStore()">🏪 店舗を変更</div>
+      <div class="staff-dropdown-item danger" onclick="switchToAdmin()">👔 管理者モードへ</div>
+    </div>
+  </div>
+
+  <!-- Staff tabs -->
+  <div class="tabs">
+    <div class="tab active" data-tab="s-entry"   onclick="switchStaffTab('s-entry')">✏️ 入力</div>
+    <div class="tab"        data-tab="s-history" onclick="switchStaffTab('s-history')">📋 提出履歴</div>
+  </div>
+
+  <!-- Entry tab -->
+  <div id="view-s-entry" class="view active">
+    <div class="container">
+
+      <!-- Editing banner -->
+      <div id="s-edit-banner" style="display:none; background:#fef3c7; border:1.5px solid #f59e0b; border-radius:var(--radius); padding:12px 16px; margin-bottom:16px; display:none; align-items:center; gap:10px;">
+        <span style="font-size:18px">✏️</span>
+        <div style="flex:1">
+          <div style="font-size:13px; font-weight:700; color:#92400e">修正中</div>
+          <div style="font-size:12px; color:#b45309" id="s-edit-banner-date"></div>
+        </div>
+        <button class="btn btn-danger" style="font-size:12px; padding:6px 12px;" onclick="cancelEdit()">キャンセル</button>
+      </div>
+
+      <!-- Store chip -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-badge badge-info">🏪</div>
+          <h3>基本情報</h3>
+        </div>
+        <div class="field">
+          <label>店舗名 Store Name</label>
+          <div class="store-chip"><span class="chip-icon">📍</span><span id="staffStoreChip">—</span></div>
+        </div>
+        <div class="field">
+          <label>日付 Date</label>
+          <input type="date" id="s-date">
+        </div>
+      </div>
+
+      <!-- Section A -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-badge badge-a">A</div>
+          <h3>セクション A — 現金 Cash</h3>
+          <span class="card-hint">TOTAL A = ACASH + AQR</span>
+        </div>
+        <div class="field"><label>ACASH (B)</label><input type="text" inputmode="decimal" data-numeric id="s-aCash" placeholder="0"></div>
+        <div class="field"><label>Petty Cash (B)</label><input type="text" inputmode="decimal" data-numeric id="s-pettyCash" placeholder="0"></div>
+        <div class="field"><label>AQR (B)</label><input type="text" inputmode="decimal" data-numeric id="s-aQR" placeholder="0"></div>
+        <div class="field total-field total-a"><label>TOTAL A (B)</label><input type="text" id="s-totalA" class="readonly-field" readonly placeholder="自動計算"></div>
+      </div>
+
+      <!-- Section B -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-badge badge-b">B</div>
+          <h3>セクション B — 銀行 Bank</h3>
+          <span class="card-hint">B/CASH + B/TRANSFER</span>
+        </div>
+        <div class="field"><label>B/CASH (B)</label><input type="text" inputmode="decimal" data-numeric id="s-bCash" placeholder="0"></div>
+        <div class="field"><label>B/TRANSFER (B)</label><input type="text" inputmode="decimal" data-numeric id="s-bTransfer" placeholder="0"></div>
+        <div class="field total-field total-b"><label>TOTAL B (B)</label><input type="text" id="s-totalB" class="readonly-field" readonly placeholder="自動計算"></div>
+      </div>
+
+      <!-- Section C -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-badge badge-c">C</div>
+          <h3>セクション C — カード Card / QR</h3>
+          <span class="card-hint">C/QR + C/CARD</span>
+        </div>
+        <div class="field"><label>C/QR (B)</label><input type="text" inputmode="decimal" data-numeric id="s-cQR" placeholder="0"></div>
+        <div class="field"><label>C/CARD (B)</label><input type="text" inputmode="decimal" data-numeric id="s-cCard" placeholder="0"></div>
+        <div class="field total-field total-c"><label>TOTAL C (B)</label><input type="text" id="s-totalC" class="readonly-field" readonly placeholder="自動計算"></div>
+      </div>
+
+      <!-- Grand Total -->
+      <div class="card grand-total-card">
+        <div class="card-header">
+          <div class="card-badge" style="background:var(--accent)">∑</div>
+          <h3>合計 GRAND TOTAL</h3>
+        </div>
+        <div class="grand-total-display">
+          <div class="amount" id="s-grandTotalDisplay">— B</div>
+          <div class="label">TOTAL A + TOTAL B + TOTAL C</div>
+        </div>
+        <div class="totals-breakdown">
+          <div class="breakdown-item"><div class="bi-label">TOTAL A</div><div class="bi-amount a" id="s-bkA">—</div></div>
+          <div class="breakdown-item"><div class="bi-label">TOTAL B</div><div class="bi-amount b" id="s-bkB">—</div></div>
+          <div class="breakdown-item"><div class="bi-label">TOTAL C</div><div class="bi-amount c" id="s-bkC">—</div></div>
+        </div>
+      </div>
+
+      <!-- Other -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-badge badge-info">📊</div>
+          <h3>その他 Other Info</h3>
+        </div>
+        <div class="field"><label>TABLE (テーブル数)</label><input type="text" inputmode="decimal" data-numeric id="s-tables" placeholder="0"></div>
+        <div class="field"><label>PPL (人数)</label><input type="text" inputmode="decimal" data-numeric id="s-people" placeholder="0"></div>
+        <div class="field">
+          <label>RECORDED BY (担当者)</label>
+          <select id="s-recordedBy"><option value="">— 担当者を選択 —</option></select>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="s-save-btn" onclick="saveStaffEntry()">💾 保存して記録する</button>
+    </div>
+  </div>
+
+  <!-- History tab -->
+  <div id="view-s-history" class="view">
+    <div class="container">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-badge badge-info">📋</div>
+          <h3>提出履歴</h3>
+          <span class="card-hint" id="s-history-count"></span>
+        </div>
+        <div id="s-history-list">
+          <div class="empty-state"><div class="icon">📭</div><p>提出済みの記録がありません</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+     SCREEN 4: Admin App
+════════════════════════════════════════════════ -->
+<div id="screen-admin" class="screen">
+  <div class="admin-header">
+    <div class="h-icon">🍢</div>
+    <div style="flex:1">
+      <h1>焼き鳥 売上報告システム</h1>
+      <p>管理者モード</p>
+    </div>
+    <span class="admin-badge">管理者</span>
+    <button class="switch-mode-btn" onclick="switchToStaff()">スタッフ画面へ</button>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="a-history" onclick="switchTab('a-history')">📋 履歴</div>
+    <div class="tab"        data-tab="a-stores"  onclick="switchTab('a-stores')">🏪 店舗管理</div>
+  </div>
+
+  <!-- Admin History -->
+  <div id="view-a-history" class="view active">
+    <div class="container-wide">
+      <div class="history-header">
+        <div>
+          <h2>売上履歴 Sales History</h2>
+          <div class="record-count" id="recordCount">0 件のデータ</div>
+        </div>
+        <div class="action-row">
+          <button class="btn btn-export" onclick="exportExcel()">📥 Excelエクスポート</button>
+          <button class="btn btn-clear" onclick="clearAll()">🗑 全削除</button>
+        </div>
+      </div>
+      <div class="filter-row">
+        <div class="field">
+          <label>店舗で絞り込み</label>
+          <select id="filterStore" onchange="renderHistory()"><option value="">全店舗</option></select>
+        </div>
+        <div class="field">
+          <label>年月で絞り込み</label>
+          <input type="month" id="filterMonth" oninput="renderHistory()">
+        </div>
+      </div>
+      <div id="historyContainer"></div>
+    </div>
+  </div>
+
+  <!-- Admin Store Management -->
+  <div id="view-a-stores" class="view">
+    <div class="container">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-badge badge-info">＋</div>
+          <h3>店舗を追加</h3>
+        </div>
+        <div class="store-add-row">
+          <input type="text" id="newStoreName" placeholder="店舗名を入力..." onkeydown="if(event.key==='Enter') addStore()">
+          <button class="btn btn-secondary" onclick="addStore()">追加</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-badge badge-info">🏪</div>
+          <h3>登録店舗一覧</h3>
+        </div>
+        <div class="store-list" id="storeList">
+          <div class="no-stores">店舗が登録されていません</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── Storage keys ────────────────────────────────────────────────
+  const STORAGE_KEY  = 'yakitori_sales_v1';
+  const STORES_KEY   = 'yakitori_stores_v1';
+  const MODE_KEY     = 'yakitori_mode';
+  const SSTORE_KEY   = 'yakitori_staff_store';
+
+  // ── Screen routing ──────────────────────────────────────────────
+
+  function showScreen(name) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-' + name).classList.add('active');
+    if (name === 'staff-setup') populateSetupSelect();
+  }
+
+  function init() {
+    const mode = localStorage.getItem(MODE_KEY);
+    if (!mode) { showScreen('mode'); return; }
+    if (mode === 'staff') {
+      const store = localStorage.getItem(SSTORE_KEY);
+      const stores = loadStores();
+      if (!store || !stores.includes(store)) { showScreen('staff-setup'); }
+      else { enterStaffMode(store); }
+    } else {
+      enterAdminMode();
+    }
+  }
+
+  function selectMode(mode) {
+    localStorage.setItem(MODE_KEY, mode);
+    if (mode === 'staff') {
+      const store = localStorage.getItem(SSTORE_KEY);
+      const stores = loadStores();
+      if (!store || !stores.includes(store)) { showScreen('staff-setup'); }
+      else { enterStaffMode(store); }
+    } else {
+      enterAdminMode();
+    }
+  }
+
+  function enterStaffMode(storeName) {
+    document.getElementById('staffStoreTitle').textContent = storeName;
+    document.getElementById('staffStoreChip').textContent  = storeName;
+    document.getElementById('s-date').value = new Date().toISOString().split('T')[0];
+    populateRecordedBySelect(storeName);
+    resetStaffForm();
+    showScreen('staff');
+  }
+
+  function enterAdminMode() {
+    populateAdminSelects();
+    renderHistory();
+    showScreen('admin');
+  }
+
+  // ── Staff store setup ───────────────────────────────────────────
+
+  function populateSetupSelect() {
+    const stores = loadStores();
+    const sel = document.getElementById('setupStoreSelect');
+    sel.innerHTML = '<option value="">— 店舗を選択 —</option>';
+    stores.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s; opt.textContent = s;
+      sel.appendChild(opt);
+    });
+    if (stores.length === 0) {
+      sel.innerHTML = '<option value="">店舗が登録されていません（管理者に依頼してください）</option>';
+    }
+  }
+
+  function confirmStaffSetup() {
+    const store = document.getElementById('setupStoreSelect').value;
+    if (!store) { showToast('店舗を選択してください', 'error'); return; }
+    localStorage.setItem(SSTORE_KEY, store);
+    enterStaffMode(store);
+  }
+
+  function changeStaffStore() {
+    closeStaffMenu();
+    localStorage.removeItem(SSTORE_KEY);
+    showScreen('staff-setup');
+  }
+
+  function switchToAdmin() {
+    closeStaffMenu();
+    if (!confirm('管理者モードに切り替えますか？')) return;
+    localStorage.setItem(MODE_KEY, 'admin');
+    enterAdminMode();
+  }
+
+  function switchToStaff() {
+    localStorage.setItem(MODE_KEY, 'staff');
+    const store = localStorage.getItem(SSTORE_KEY);
+    const stores = loadStores();
+    if (!store || !stores.includes(store)) { showScreen('staff-setup'); }
+    else { enterStaffMode(store); }
+  }
+
+  // ── Staff menu ──────────────────────────────────────────────────
+
+  function toggleStaffMenu() {
+    document.getElementById('staffDropdown').classList.toggle('open');
+  }
+
+  function closeStaffMenu() {
+    document.getElementById('staffDropdown').classList.remove('open');
+  }
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.staff-menu-btn') && !e.target.closest('.staff-dropdown')) {
+      closeStaffMenu();
+    }
+  });
+
+  // ── Store management ────────────────────────────────────────────
+
+  function loadStores() {
+    try { return JSON.parse(localStorage.getItem(STORES_KEY)) || []; }
+    catch { return []; }
+  }
+
+  function saveStores(stores) {
+    localStorage.setItem(STORES_KEY, JSON.stringify(stores));
+  }
+
+  function addStore() {
+    const input = document.getElementById('newStoreName');
+    const name = input.value.trim();
+    if (!name) { showToast('店舗名を入力してください', 'error'); return; }
+    const stores = loadStores();
+    if (stores.includes(name)) { showToast('その店舗は既に登録されています', 'error'); return; }
+    stores.push(name);
+    saveStores(stores);
+    input.value = '';
+    renderStores();
+    populateAdminSelects();
+    showToast('✅ 店舗を追加しました', 'success');
+  }
+
+  function deleteStore(name) {
+    const count = loadData().filter(e => e.storeName === name).length;
+    const msg = count > 0
+      ? `「${name}」を削除しますか？\nこの店舗の売上データ ${count} 件は残ります。`
+      : `「${name}」を削除しますか？`;
+    if (!confirm(msg)) return;
+    saveStores(loadStores().filter(s => s !== name));
+    renderStores();
+    populateAdminSelects();
+    showToast('削除しました');
+  }
+
+  // ── Staff per store ─────────────────────────────────────────────
+
+  const STAFF_KEY = 'yakitori_staff_v1';
+
+  function loadStaff() {
+    try { return JSON.parse(localStorage.getItem(STAFF_KEY)) || {}; }
+    catch { return {}; }
+  }
+
+  function saveStaff(obj) { localStorage.setItem(STAFF_KEY, JSON.stringify(obj)); }
+
+  function getStaffForStore(storeName) { return loadStaff()[storeName] || []; }
+
+  function addStaffMember(idx, storeName) {
+    const input = document.getElementById('new-staff-' + idx);
+    const name = input.value.trim();
+    if (!name) { showToast('入力者名を入力してください', 'error'); return; }
+    const obj = loadStaff();
+    if (!obj[storeName]) obj[storeName] = [];
+    if (obj[storeName].includes(name)) { showToast('すでに登録されています', 'error'); return; }
+    obj[storeName].push(name);
+    saveStaff(obj);
+    input.value = '';
+    renderStores();
+    showToast('✅ 入力者を追加しました', 'success');
+  }
+
+  function removeStaffMember(storeName, staffName) {
+    const obj = loadStaff();
+    if (!obj[storeName]) return;
+    obj[storeName] = obj[storeName].filter(s => s !== staffName);
+    saveStaff(obj);
+    renderStores();
+    showToast('削除しました');
+  }
+
+  function populateRecordedBySelect(storeName) {
+    const staff = getStaffForStore(storeName);
+    const sel = document.getElementById('s-recordedBy');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">— 担当者を選択 —</option>';
+    staff.forEach(s => {
+      const o = document.createElement('option');
+      o.value = s; o.textContent = s;
+      if (s === cur) o.selected = true;
+      sel.appendChild(o);
+    });
+    if (staff.length === 0) {
+      sel.innerHTML = '<option value="">（入力者が未登録です）</option>';
+      sel.disabled = true;
+    } else {
+      sel.disabled = false;
+    }
+  }
+
+  function renderStores() {
+    const stores = loadStores();
+    const allData = loadData();
+    const staffAll = loadStaff();
+    const list = document.getElementById('storeList');
+    if (stores.length === 0) {
+      list.innerHTML = '<div class="no-stores">店舗が登録されていません</div>';
+      return;
+    }
+    list.innerHTML = stores.map((name, idx) => {
+      const count = allData.filter(e => e.storeName === name).length;
+      const staff = staffAll[name] || [];
+      const safe = name.replace(/'/g, "\\'");
+      const chips = staff.length
+        ? staff.map(s => `
+            <span class="staff-chip">
+              ${s}
+              <button class="staff-chip-del" onclick="removeStaffMember('${safe}','${s.replace(/'/g,"\\'")}')">×</button>
+            </span>`).join('')
+        : '<span style="font-size:12px;color:var(--muted)">入力者が未登録です</span>';
+      return `
+        <div class="store-card">
+          <div class="store-card-header">
+            <span class="store-item-name">🏪 ${name}</span>
+            <span class="store-item-meta">売上データ ${count} 件</span>
+          </div>
+          <div class="store-card-body">
+            <div class="staff-section-label">入力者 Recorded By</div>
+            <div class="staff-chips">${chips}</div>
+            <div class="staff-add-row">
+              <input type="text" id="new-staff-${idx}" placeholder="入力者名を追加..."
+                onkeydown="if(event.key==='Enter') addStaffMember(${idx},'${safe}')">
+              <button class="btn btn-secondary" style="padding:8px 14px;font-size:13px"
+                onclick="addStaffMember(${idx},'${safe}')">＋ 追加</button>
+            </div>
+          </div>
+          <div class="store-card-footer">
+            <button class="btn btn-danger" onclick="deleteStore('${safe}')">店舗を削除</button>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function populateAdminSelects() {
+    const stores = loadStores();
+    const filterEl = document.getElementById('filterStore');
+    const curF = filterEl.value;
+    filterEl.innerHTML = '<option value="">全店舗</option>';
+    stores.forEach(s => {
+      const o = document.createElement('option');
+      o.value = s; o.textContent = s;
+      if (s === curF) o.selected = true;
+      filterEl.appendChild(o);
+    });
+  }
+
+  // ── Calculations ────────────────────────────────────────────────
+
+  function numVal(id) {
+    return parseFloat(document.getElementById(id).value.replace(/,/g, '')) || 0;
+  }
+
+  function calcTotalsFor(prefix) {
+    const aCash = numVal(prefix+'aCash'), pettyCash = numVal(prefix+'pettyCash'), aQR = numVal(prefix+'aQR');
+    const totalA = aCash + aQR;
+    const bCash = numVal(prefix+'bCash'), bTransfer = numVal(prefix+'bTransfer');
+    const totalB = bCash + bTransfer;
+    const cQR = numVal(prefix+'cQR'), cCard = numVal(prefix+'cCard');
+    const totalC = cQR + cCard;
+    const grand = totalA + totalB + totalC;
+
+    document.getElementById(prefix+'totalA').value = totalA.toLocaleString('en-US');
+    document.getElementById(prefix+'totalB').value = totalB.toLocaleString('en-US');
+    document.getElementById(prefix+'totalC').value = totalC.toLocaleString('en-US');
+    document.getElementById(prefix+'grandTotalDisplay').textContent = grand.toLocaleString('en-US') + ' B';
+    document.getElementById(prefix+'bkA').textContent = totalA.toLocaleString('en-US') + ' B';
+    document.getElementById(prefix+'bkB').textContent = totalB.toLocaleString('en-US') + ' B';
+    document.getElementById(prefix+'bkC').textContent = totalC.toLocaleString('en-US') + ' B';
+  }
+
+  function calcStaffTotals() { calcTotalsFor('s-'); }
+
+  // ── 全角→半角変換 ───────────────────────────────────────────────
+
+  function toHalf(s) {
+    return s.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+            .replace(/[^0-9]/g, '');
+  }
+
+  let isComposing = false;
+  document.addEventListener('compositionstart', () => { isComposing = true; });
+  document.addEventListener('compositionend', e => {
+    isComposing = false;
+    if (e.target.dataset.numeric !== undefined) {
+      e.target.value = toHalf(e.target.value);
+      calcStaffTotals();
+    }
+  });
+  document.addEventListener('input', e => {
+    if (e.target.dataset.numeric !== undefined && !isComposing) {
+      e.target.value = toHalf(e.target.value);
+      calcStaffTotals();
+    }
+  });
+
+  // ── Save ────────────────────────────────────────────────────────
+
+  function buildEntry(storeName, prefix) {
+    const aCash = numVal(prefix+'aCash'), pettyCash = numVal(prefix+'pettyCash'), aQR = numVal(prefix+'aQR');
+    const totalA = aCash + aQR;
+    const bCash = numVal(prefix+'bCash'), bTransfer = numVal(prefix+'bTransfer');
+    const totalB = bCash + bTransfer;
+    const cQR = numVal(prefix+'cQR'), cCard = numVal(prefix+'cCard');
+    const totalC = cQR + cCard;
+    return {
+      id: Date.now(), storeName,
+      date: document.getElementById(prefix+'date').value,
+      aCash, pettyCash, aQR, totalA,
+      bCash, bTransfer, totalB,
+      cQR, cCard, totalC,
+      grandTotal: totalA + totalB + totalC,
+      tables: numVal(prefix+'tables'),
+      people: numVal(prefix+'people'),
+      recordedBy: document.getElementById(prefix+'recordedBy').value.trim()
+    };
+  }
+
+  let editingId = null;
+
+  function saveStaffEntry() {
+    const storeName = localStorage.getItem(SSTORE_KEY);
+    const date = document.getElementById('s-date').value;
+    if (!date) { showToast('日付を入力してください', 'error'); return; }
+
+    const entry = buildEntry(storeName, 's-');
+    const data = loadData();
+
+    if (editingId !== null) {
+      const idx = data.findIndex(e => e.id === editingId);
+      if (idx !== -1) { entry.id = editingId; data[idx] = entry; }
+      saveData(data);
+      showToast('✅ 修正しました！', 'success');
+    } else {
+      data.push(entry);
+      saveData(data);
+      showToast('✅ 保存しました！', 'success');
+    }
+
+    resetStaffForm();
+  }
+
+  function startEdit(id) {
+    const entry = loadData().find(e => e.id === id);
+    if (!entry) return;
+
+    editingId = id;
+
+    document.getElementById('s-date').value       = entry.date;
+    document.getElementById('s-aCash').value      = entry.aCash;
+    document.getElementById('s-pettyCash').value  = entry.pettyCash;
+    document.getElementById('s-aQR').value        = entry.aQR;
+    document.getElementById('s-bCash').value      = entry.bCash;
+    document.getElementById('s-bTransfer').value  = entry.bTransfer;
+    document.getElementById('s-cQR').value        = entry.cQR;
+    document.getElementById('s-cCard').value      = entry.cCard;
+    document.getElementById('s-tables').value     = entry.tables;
+    document.getElementById('s-people').value     = entry.people;
+    // recordedBy: 選択肢にない名前の場合は一時的に追加して選択
+    const rbSel = document.getElementById('s-recordedBy');
+    if (entry.recordedBy && ![...rbSel.options].some(o => o.value === entry.recordedBy)) {
+      const o = document.createElement('option');
+      o.value = entry.recordedBy; o.textContent = entry.recordedBy;
+      rbSel.appendChild(o);
+    }
+    rbSel.value = entry.recordedBy;
+    calcStaffTotals();
+
+    const banner = document.getElementById('s-edit-banner');
+    banner.style.display = 'flex';
+    document.getElementById('s-edit-banner-date').textContent = entry.date + ' の記録を修正中';
+    document.getElementById('s-save-btn').textContent = '✏️ 修正を保存する';
+
+    switchStaffTab('s-entry');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function cancelEdit() {
+    editingId = null;
+    document.getElementById('s-edit-banner').style.display = 'none';
+    document.getElementById('s-save-btn').textContent = '💾 保存して記録する';
+    resetStaffForm();
+  }
+
+  function resetStaffForm() {
+    editingId = null;
+    document.getElementById('s-edit-banner').style.display = 'none';
+    document.getElementById('s-save-btn').textContent = '💾 保存して記録する';
+    ['s-aCash','s-pettyCash','s-aQR','s-bCash','s-bTransfer','s-cQR','s-cCard','s-tables','s-people'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('s-recordedBy').value = '';
+    document.getElementById('s-date').value = new Date().toISOString().split('T')[0];
+    calcStaffTotals();
+  }
+
+  function switchStaffTab(tab) {
+    document.querySelectorAll('#screen-staff .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    document.querySelectorAll('#screen-staff .view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-' + tab).classList.add('active');
+    if (tab === 's-history') renderStaffHistory();
+  }
+
+  function renderStaffHistory() {
+    const storeName = localStorage.getItem(SSTORE_KEY);
+    const entries = loadData()
+      .filter(e => e.storeName === storeName)
+      .sort((a, b) => b.date.localeCompare(a.date));
+
+    document.getElementById('s-history-count').textContent = entries.length + ' 件';
+    const list = document.getElementById('s-history-list');
+
+    if (entries.length === 0) {
+      list.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>提出済みの記録がありません</p></div>';
+      return;
+    }
+
+    list.innerHTML = entries.map(e => `
+      <div class="s-history-item">
+        <div style="flex:1">
+          <div class="s-history-date">${e.date}</div>
+          <div class="s-history-total">${e.grandTotal.toLocaleString()} B</div>
+          <div class="s-history-sub">A: ${e.totalA.toLocaleString()} / B: ${e.totalB.toLocaleString()} / C: ${e.totalC.toLocaleString()} &nbsp;|&nbsp; ${e.recordedBy || '—'}</div>
+        </div>
+        <button class="btn btn-secondary" style="font-size:13px;padding:8px 14px;white-space:nowrap" onclick="startEdit(${e.id})">✏️ 修正</button>
+      </div>`).join('');
+  }
+
+  // ── Data persistence ────────────────────────────────────────────
+
+  function loadData() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+    catch { return []; }
+  }
+
+  function saveData(data) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }
+
+  function deleteEntry(id) {
+    if (!confirm('この記録を削除しますか？')) return;
+    saveData(loadData().filter(e => e.id !== id));
+    renderHistory();
+    showToast('削除しました');
+  }
+
+  function clearAll() {
+    if (!confirm('すべての記録を削除しますか？この操作は元に戻せません。')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    renderHistory();
+    showToast('全件削除しました');
+  }
+
+  // ── History ─────────────────────────────────────────────────────
+
+  function getFiltered() {
+    const storeF = document.getElementById('filterStore').value;
+    const monthF = document.getElementById('filterMonth').value; // "YYYY-MM"
+    return loadData().filter(e => {
+      if (storeF && e.storeName !== storeF) return false;
+      if (monthF && !e.date.startsWith(monthF)) return false;
+      return true;
+    }).sort((a, b) => b.date.localeCompare(a.date));
+  }
+
+  function entryRow(e) {
+    return `
+      <tr>
+        <td>${e.date}</td>
+        <td>${e.storeName}</td>
+        <td class="amount total-col" style="font-size:15px">${e.grandTotal.toLocaleString()}</td>
+        <td class="amount">${e.aCash.toLocaleString()}</td>
+        <td class="amount">${e.pettyCash.toLocaleString()}</td>
+        <td class="amount">${e.aQR.toLocaleString()}</td>
+        <td class="amount" style="color:var(--sec-a);font-weight:700">${e.totalA.toLocaleString()}</td>
+        <td class="amount">${e.bCash.toLocaleString()}</td>
+        <td class="amount">${e.bTransfer.toLocaleString()}</td>
+        <td class="amount" style="color:var(--sec-b);font-weight:700">${e.totalB.toLocaleString()}</td>
+        <td class="amount">${e.cQR.toLocaleString()}</td>
+        <td class="amount">${e.cCard.toLocaleString()}</td>
+        <td class="amount" style="color:var(--sec-c);font-weight:700">${e.totalC.toLocaleString()}</td>
+        <td>${e.tables}</td>
+        <td>${e.people}</td>
+        <td>${e.recordedBy}</td>
+        <td><button class="btn btn-danger" onclick="deleteEntry(${e.id})">削除</button></td>
+      </tr>`;
+  }
+
+  function sumRow(entries) {
+    const s = k => entries.reduce((a, e) => a + (e[k] || 0), 0);
+    return `
+      <tr class="month-sum">
+        <td colspan="2">月 計</td>
+        <td class="amount">${s('grandTotal').toLocaleString()}</td>
+        <td class="amount">${s('aCash').toLocaleString()}</td>
+        <td class="amount">${s('pettyCash').toLocaleString()}</td>
+        <td class="amount">${s('aQR').toLocaleString()}</td>
+        <td class="amount">${s('totalA').toLocaleString()}</td>
+        <td class="amount">${s('bCash').toLocaleString()}</td>
+        <td class="amount">${s('bTransfer').toLocaleString()}</td>
+        <td class="amount">${s('totalB').toLocaleString()}</td>
+        <td class="amount">${s('cQR').toLocaleString()}</td>
+        <td class="amount">${s('cCard').toLocaleString()}</td>
+        <td class="amount">${s('totalC').toLocaleString()}</td>
+        <td>${s('tables')}</td>
+        <td>${s('people')}</td>
+        <td colspan="2"></td>
+      </tr>`;
+  }
+
+  function renderHistory() {
+    const data = getFiltered();
+    const container = document.getElementById('historyContainer');
+    document.getElementById('recordCount').textContent = data.length + ' 件のデータ';
+
+    if (data.length === 0) {
+      container.innerHTML = '<div class="empty-state" style="padding:60px 20px"><div class="icon">📭</div><p>データがありません</p><small>スタッフが入力すると表示されます</small></div>';
+      return;
+    }
+
+    // Group by YYYY-MM
+    const byMonth = {};
+    data.forEach(e => {
+      const key = e.date.slice(0, 7);
+      (byMonth[key] = byMonth[key] || []).push(e);
+    });
+    const months = Object.keys(byMonth).sort((a, b) => b.localeCompare(a));
+
+    const thead = `
+      <thead><tr>
+        <th>日付</th><th>店舗名</th><th>TOTAL 売上</th>
+        <th>ACASH</th><th>Petty</th><th>AQR</th><th>TOTAL A</th>
+        <th>B/CASH</th><th>B/TRANSFER</th><th>TOTAL B</th>
+        <th>C/QR</th><th>C/CARD</th><th>TOTAL C</th>
+        <th>TABLE</th><th>PPL</th><th>担当者</th><th></th>
+      </tr></thead>`;
+
+    container.innerHTML = months.map(key => {
+      const entries = byMonth[key];
+      const [yr, mo] = key.split('-');
+      const monthTotal = entries.reduce((a, e) => a + e.grandTotal, 0);
+      return `
+        <div class="month-section">
+          <div class="month-header">
+            <span class="mh-label">${yr}年${parseInt(mo)}月</span>
+            <span class="mh-count">${entries.length} 件</span>
+            <span class="mh-total">${monthTotal.toLocaleString()} B</span>
+          </div>
+          <div class="history-table-wrap">
+            <table>${thead}<tbody>
+              ${entries.map(entryRow).join('')}
+              ${sumRow(entries)}
+            </tbody></table>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // ── Excel export (one sheet per store) ──────────────────────────
+
+  function exportExcel() {
+    const data = getFiltered();
+    if (data.length === 0) { showToast('エクスポートするデータがありません', 'error'); return; }
+
+    const headers = [
+      '日付','店舗名','TOTAL 売上 (B)',
+      'ACASH (B)','Petty Cash (B)','AQR (B)','TOTAL A (B)',
+      'B/CASH (B)','B/TRANSFER (B)','TOTAL B (B)',
+      'C/QR (B)','C/CARD (B)','TOTAL C (B)',
+      'TABLE','PPL','RECORDED BY'
+    ];
+    const colWidths = [
+      {wch:12},{wch:18},{wch:14},
+      {wch:12},{wch:12},{wch:10},{wch:12},
+      {wch:12},{wch:14},{wch:12},{wch:10},{wch:12},{wch:12},
+      {wch:8},{wch:8},{wch:14}
+    ];
+    const sum = (rows, k) => rows.reduce((a, e) => a + (e[k] || 0), 0);
+    const toRow = e => [
+      e.date, e.storeName, e.grandTotal,
+      e.aCash, e.pettyCash, e.aQR, e.totalA,
+      e.bCash, e.bTransfer, e.totalB,
+      e.cQR, e.cCard, e.totalC,
+      e.tables, e.people, e.recordedBy
+    ];
+    const sumRow = rows => [
+      '合計','',sum(rows,'grandTotal'),
+      sum(rows,'aCash'),sum(rows,'pettyCash'),sum(rows,'aQR'),sum(rows,'totalA'),
+      sum(rows,'bCash'),sum(rows,'bTransfer'),sum(rows,'totalB'),
+      sum(rows,'cQR'),sum(rows,'cCard'),sum(rows,'totalC'),
+      sum(rows,'tables'),sum(rows,'people'),''
+    ];
+
+    const byStore = {};
+    data.forEach(e => { (byStore[e.storeName] = byStore[e.storeName] || []).push(e); });
+
+    const wb = XLSX.utils.book_new();
+    Object.entries(byStore).forEach(([name, rows]) => {
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows.map(toRow), [], sumRow(rows)]);
+      ws['!cols'] = colWidths;
+      XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31));
+    });
+    if (Object.keys(byStore).length > 1) {
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...data.map(toRow), [], sumRow(data)]);
+      ws['!cols'] = colWidths;
+      XLSX.utils.book_append_sheet(wb, ws, '全店舗合計');
+    }
+
+    XLSX.writeFile(wb, `売上報告_${new Date().toISOString().split('T')[0]}.xlsx`);
+    showToast('✅ Excelファイルをダウンロードしました', 'success');
+  }
+
+  // ── Admin tab navigation ────────────────────────────────────────
+
+  function switchTab(tab) {
+    document.querySelectorAll('#screen-admin .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    document.querySelectorAll('#screen-admin .view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-' + tab).classList.add('active');
+    if (tab === 'a-history') renderHistory();
+    if (tab === 'a-stores')  renderStores();
+  }
+
+  // ── Toast ───────────────────────────────────────────────────────
+
+  function showToast(msg, type = '') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (type ? ' ' + type : '');
+    setTimeout(() => t.className = 'toast', 3000);
+  }
+
+  // ── Init ────────────────────────────────────────────────────────
+  calcStaffTotals();
+  init();
+</script>
+</body>
+</html>
