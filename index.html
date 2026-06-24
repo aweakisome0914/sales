@@ -906,7 +906,17 @@
     }
   }
 
+  function checkAdminPassword() {
+    const pw = prompt('管理者パスワードを入力してください');
+    if (pw === null) return false;
+    if (pw !== '0000') { showToast('パスワードが違います', 'error'); return false; }
+    return true;
+  }
+
   function selectMode(mode) {
+    if (mode === 'admin') {
+      if (!checkAdminPassword()) return;
+    }
     localStorage.setItem(MODE_KEY, mode);
     if (mode === 'staff') {
       const store = localStorage.getItem(SSTORE_KEY);
@@ -964,7 +974,7 @@
 
   function switchToAdmin() {
     closeStaffMenu();
-    if (!confirm('管理者モードに切り替えますか？')) return;
+    if (!checkAdminPassword()) return;
     localStorage.setItem(MODE_KEY, 'admin');
     enterAdminMode();
   }
@@ -1010,6 +1020,9 @@
   }
 
   function deleteStore(name) {
+    const pw = prompt('パスワードを入力してください');
+    if (pw === null) return;
+    if (pw !== '0000') { showToast('パスワードが違います', 'error'); return; }
     const count = loadData().filter(e => e.storeName === name).length;
     const msg = count > 0
       ? `「${name}」を削除しますか？\nこの店舗の売上データ ${count} 件は残ります。`
