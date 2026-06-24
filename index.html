@@ -754,10 +754,120 @@
 
 <script>
   // ── Storage keys ────────────────────────────────────────────────
-  const STORAGE_KEY  = 'yakitori_sales_v1';
-  const STORES_KEY   = 'yakitori_stores_v1';
-  const MODE_KEY     = 'yakitori_mode';
-  const SSTORE_KEY   = 'yakitori_staff_store';
+  // ── Firebase ────────────────────────────────────────────────────
+  const DB       = 'https://sales-management-c1462-default-rtdb.firebaseio.com';
+  const MODE_KEY   = 'yakitori_mode';
+  const SSTORE_KEY = 'yakitori_staff_store';
+
+  // In-memory cache (populated from Firebase on init)
+  let _cache = { sales: {}, stores: [], staff: {} };
+
+  async function fbGet(path) {
+    try {
+      const r = await fetch(`${DB}/${path}.json`);
+      return await r.json();
+    } catch { return null; }
+  }
+
+  async function fbPut(path, data) {
+    try {
+      await fetch(`${DB}/${path}.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+    } catch(e) { console.error('Firebase write error', e); }
+  }
+
+  async function fbDelete(path) {
+    try { await fetch(`${DB}/${path}.json`, { method: 'DELETE' }); }
+    catch(e) { console.error('Firebase delete error', e); }
+  }
+
+  async function initFirebase() {
+    const data = await fbGet('') || {};
+    _cache.sales  = data.sales  || {};
+    _cache.stores = Array.isArray(data.stores) ? data.stores : [];
+    _cache.staff  = data.staff  || {};
+    listenForChanges();
+  }
+
+  function listenForChanges() {
+    try {
+      const es = new EventSource(`${DB}/.json`);
+      es.addEventListener('put', e => {
+        const { path, data } = JSON.parse(e.data);
+        if (path === '/') {
+          _cache.sales  = (data && data.sales)  ? data.sales  : {};
+          _cache.stores = (data && Array.isArray(data.stores)) ? data.stores : [];
+          _cache.staff  = (data && data.staff)  ? data.staff  : {};
+        } else if (path === '/sales' || path.startsWith('/sales/')) {
+          if (path === '/sales') {
+            _cache.sales = data || {};
+          } else {
+            const id = path.replace('/sales/', '');
+            if (data) _cache.sales[id] = data;
+            else delete _cache.sales[id];
+          }
+        } else if (path === '/stores') {
+          _cache.stores = Array.isArray(data) ? data : [];
+        } else if (path === '/staff') {
+          _cache.staff = data || {};
+        }
+        refreshUIFromPush(path);
+      });
+    } catch(e) { console.error('EventSource error', e); }
+  }
+
+  function refreshUIFromPush(path) {
+    // 売上データが変化 → 管理者履歴を再描画
+    if (path.includes('/sales')) {
+      const adminScreen = document.getElementById('screen-admin');
+      const histView    = document.getElementById('view-a-history');
+      if (adminScreen.classList.contains('active') && histView.classList.contains('active')) {
+        renderHistory();
+      }
+    }
+    // 店舗リストが変化 → セレクト更新
+    if (path === '/' || path === '/stores') {
+      populateAdminSelects();
+      populateSetupSelect();
+    }
+    // スタッフが変化 → 店舗管理を再描画
+    if (path === '/' || path === '/stores' || path === '/staff') {
+      const storesView = document.getElementById('view-a-stores');
+      if (storesView && storesView.classList.contains('active')) renderStores();
+    }
+  }
+
+  // ── Cache-backed data accessors (synchronous interface) ─────────
+
+  function loadData() {
+    return Object.values(_cache.sales);
+  }
+
+  function saveData(entries) {
+    const obj = {};
+    entries.forEach(e => { obj[e.id] = e; });
+    _cache.sales = obj;
+    fbPut('sales', obj);
+  }
+
+  function loadStores() {
+    return Array.isArray(_cache.stores) ? [..._cache.stores] : [];
+  }
+
+  function saveStores(stores) {
+    _cache.stores = stores;
+    fbPut('stores', stores);
+  }
+
+  function loadStaff() { return { ..._cache.staff }; }
+
+  function saveStaff(obj) {
+    _cache.staff = obj;
+    fbPut('staff', obj);
+  }
 
   // ── Screen routing ──────────────────────────────────────────────
 
@@ -869,15 +979,6 @@
 
   // ── Store management ────────────────────────────────────────────
 
-  function loadStores() {
-    try { return JSON.parse(localStorage.getItem(STORES_KEY)) || []; }
-    catch { return []; }
-  }
-
-  function saveStores(stores) {
-    localStorage.setItem(STORES_KEY, JSON.stringify(stores));
-  }
-
   function addStore() {
     const input = document.getElementById('newStoreName');
     const name = input.value.trim();
@@ -905,15 +1006,6 @@
   }
 
   // ── Staff per store ─────────────────────────────────────────────
-
-  const STAFF_KEY = 'yakitori_staff_v1';
-
-  function loadStaff() {
-    try { return JSON.parse(localStorage.getItem(STAFF_KEY)) || {}; }
-    catch { return {}; }
-  }
-
-  function saveStaff(obj) { localStorage.setItem(STAFF_KEY, JSON.stringify(obj)); }
 
   function getStaffForStore(storeName) { return loadStaff()[storeName] || []; }
 
@@ -1094,16 +1186,15 @@
     if (!date) { showToast('日付を入力してください', 'error'); return; }
 
     const entry = buildEntry(storeName, 's-');
-    const data = loadData();
 
     if (editingId !== null) {
-      const idx = data.findIndex(e => e.id === editingId);
-      if (idx !== -1) { entry.id = editingId; data[idx] = entry; }
-      saveData(data);
+      entry.id = editingId;
+      _cache.sales[editingId] = entry;
+      fbPut('sales/' + editingId, entry);
       showToast('✅ 修正しました！', 'success');
     } else {
-      data.push(entry);
-      saveData(data);
+      _cache.sales[entry.id] = entry;
+      fbPut('sales/' + entry.id, entry);
       showToast('✅ 保存しました！', 'success');
     }
 
@@ -1196,27 +1287,20 @@
       </div>`).join('');
   }
 
-  // ── Data persistence ────────────────────────────────────────────
-
-  function loadData() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
-    catch { return []; }
-  }
-
-  function saveData(data) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }
+  // ── Delete / clear ──────────────────────────────────────────────
 
   function deleteEntry(id) {
     if (!confirm('この記録を削除しますか？')) return;
-    saveData(loadData().filter(e => e.id !== id));
+    delete _cache.sales[id];
+    fbDelete('sales/' + id);
     renderHistory();
     showToast('削除しました');
   }
 
   function clearAll() {
     if (!confirm('すべての記録を削除しますか？この操作は元に戻せません。')) return;
-    localStorage.removeItem(STORAGE_KEY);
+    _cache.sales = {};
+    fbDelete('sales');
     renderHistory();
     showToast('全件削除しました');
   }
@@ -1401,7 +1485,24 @@
 
   // ── Init ────────────────────────────────────────────────────────
   calcStaffTotals();
-  init();
+
+  async function appInit() {
+    // ローディング表示
+    document.getElementById('screen-mode').classList.add('active');
+    const loading = document.createElement('div');
+    loading.id = 'fb-loading';
+    loading.style.cssText = 'color:#94a3b8;font-size:14px;margin-top:24px;text-align:center';
+    loading.textContent = '🔄 データを読み込み中...';
+    document.getElementById('screen-mode').appendChild(loading);
+
+    await initFirebase();
+
+    loading.remove();
+    document.getElementById('screen-mode').classList.remove('active');
+    init();
+  }
+
+  appInit();
 </script>
 <script>
   if ('serviceWorker' in navigator) {
