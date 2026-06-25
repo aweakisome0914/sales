@@ -1212,6 +1212,7 @@
   // ── Photo capture & PDF ────────────────────────────────────────
 
   window._staffPhotos = [null, null];
+  window._staffPhotosModified = false;
 
   function compressImage(file) {
     return new Promise(resolve => {
@@ -1241,6 +1242,7 @@
     if (!file) return;
     compressImage(file).then(b64 => {
       window._staffPhotos[idx] = b64;
+      window._staffPhotosModified = true;
       document.getElementById('s-photo-preview-' + idx).src = b64;
       document.getElementById('s-photo-wrap-' + idx).style.display = 'block';
     });
@@ -1248,6 +1250,7 @@
 
   function removePhoto(idx) {
     window._staffPhotos[idx] = null;
+    window._staffPhotosModified = true;
     document.getElementById('s-photoInput-' + idx).value = '';
     document.getElementById('s-photo-wrap-' + idx).style.display = 'none';
     document.getElementById('s-photo-preview-' + idx).src = '';
@@ -1325,30 +1328,28 @@
 
     const entry = buildEntry(storeName, 's-');
 
-    const newPhotos = window._staffPhotos.filter(Boolean);
+    const photos = window._staffPhotos; // [b64|null, b64|null] インデックスを保持
 
     if (editingId !== null) {
       const existing = _cache.sales[editingId] || {};
       entry.id = editingId;
-      entry.hasPhoto = newPhotos.length > 0 || !!(existing.hasPhoto);
+      if (window._staffPhotosModified) {
+        // 写真に変更あり → 現在の状態で上書き
+        entry.hasPhoto = photos.some(Boolean);
+        if (entry.hasPhoto) fbPut('photos/' + editingId, photos);
+        else fbDelete('photos/' + editingId);
+      } else {
+        // 写真未変更 → 既存のhasPhotoを引き継ぐ
+        entry.hasPhoto = !!(existing.hasPhoto);
+      }
       _cache.sales[editingId] = entry;
       fbPut('sales/' + editingId, entry);
-      if (newPhotos.length > 0) {
-        fbGet('photos/' + editingId).then(prev => {
-          const merged = Array.isArray(prev) ? [...prev] : (prev ? [prev] : []);
-          newPhotos.forEach((p, i) => { if (p) merged[i] = p; });
-          fbPut('photos/' + editingId, merged);
-          buildAndSavePDF(entry, merged);
-        });
-      }
       showToast('✅ 修正しました！', 'success');
     } else {
+      entry.hasPhoto = photos.some(Boolean);
       _cache.sales[entry.id] = entry;
       fbPut('sales/' + entry.id, entry);
-      if (newPhotos.length > 0) {
-        fbPut('photos/' + entry.id, newPhotos);
-        buildAndSavePDF(entry, newPhotos);
-      }
+      if (entry.hasPhoto) fbPut('photos/' + entry.id, photos);
       showToast('✅ 保存しました！', 'success');
     }
 
@@ -1388,6 +1389,7 @@
 
     // 写真プレビュー
     window._staffPhotos = [null, null];
+    window._staffPhotosModified = false;
     [0, 1].forEach(i => {
       document.getElementById('s-photo-wrap-' + i).style.display = 'none';
       document.getElementById('s-photo-preview-' + i).src = '';
@@ -1464,7 +1466,6 @@
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
           <button class="btn btn-secondary" style="font-size:13px;padding:8px 14px;white-space:nowrap" onclick="startEdit(${e.id})">✏️ 修正</button>
-          ${e.hasPhoto ? `<button class="btn btn-secondary" style="font-size:12px;padding:7px 14px" onclick="downloadEntryPDF(${e.id})">📄 PDF保存</button>` : ''}
         </div>
       </div>`).join('');
   }
