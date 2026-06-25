@@ -657,17 +657,25 @@
           <select id="s-recordedBy"><option value="">— 担当者を選択 —</option></select>
         </div>
         <div class="field">
-          <label>📷 売上表の写真</label>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <input type="file" id="s-photoInput" accept="image/*" capture="environment"
-                   style="display:none" onchange="handlePhotoCapture(this)">
-            <button type="button" class="btn btn-secondary" style="font-size:13px;padding:8px 16px"
-                    onclick="document.getElementById('s-photoInput').click()">📷 写真を撮影</button>
-            <button type="button" id="s-photo-remove" class="btn btn-danger"
-                    style="font-size:13px;padding:8px 14px;display:none"
-                    onclick="removePhoto()">✕ 削除</button>
+          <label>📷 売上表の写真（最大2枚・カメラまたはライブラリ）</label>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div style="flex:1;min-width:140px">
+              <input type="file" id="s-photoInput-0" accept="image/*" style="display:none" onchange="handlePhotoCapture(this,0)">
+              <button type="button" class="btn btn-secondary" style="font-size:13px;padding:8px 14px;width:100%" onclick="document.getElementById('s-photoInput-0').click()">📷 写真1を選択</button>
+              <div id="s-photo-wrap-0" style="display:none;margin-top:8px;position:relative">
+                <img id="s-photo-preview-0" style="width:100%;border-radius:8px;border:1px solid rgba(255,255,255,0.1)">
+                <button type="button" onclick="removePhoto(0)" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.65);color:white;border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px;line-height:26px">✕</button>
+              </div>
+            </div>
+            <div style="flex:1;min-width:140px">
+              <input type="file" id="s-photoInput-1" accept="image/*" style="display:none" onchange="handlePhotoCapture(this,1)">
+              <button type="button" class="btn btn-secondary" style="font-size:13px;padding:8px 14px;width:100%" onclick="document.getElementById('s-photoInput-1').click()">📷 写真2を選択</button>
+              <div id="s-photo-wrap-1" style="display:none;margin-top:8px;position:relative">
+                <img id="s-photo-preview-1" style="width:100%;border-radius:8px;border:1px solid rgba(255,255,255,0.1)">
+                <button type="button" onclick="removePhoto(1)" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.65);color:white;border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px;line-height:26px">✕</button>
+              </div>
+            </div>
           </div>
-          <img id="s-photo-preview" style="display:none;max-width:100%;border-radius:8px;margin-top:10px;border:1px solid rgba(255,255,255,0.1)">
         </div>
       </div>
 
@@ -1203,41 +1211,77 @@
 
   // ── Photo capture & PDF ────────────────────────────────────────
 
-  window._staffPhoto = null;
+  window._staffPhotos = [null, null];
 
-  function handlePhotoCapture(input) {
-    const file = input.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = e => {
-      const img = new Image();
-      img.onload = () => {
-        const MAX = 1200;
-        let w = img.width, h = img.height;
-        if (w > MAX || h > MAX) {
-          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-          else { w = Math.round(w * MAX / h); h = MAX; }
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        const b64 = canvas.toDataURL('image/jpeg', 0.7);
-        window._staffPhoto = b64;
-        const preview = document.getElementById('s-photo-preview');
-        preview.src = b64;
-        preview.style.display = 'block';
-        document.getElementById('s-photo-remove').style.display = 'inline-block';
+  function compressImage(file) {
+    return new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX = 1200;
+          let w = img.width, h = img.height;
+          if (w > MAX || h > MAX) {
+            if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+            else { w = Math.round(w * MAX / h); h = MAX; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', 0.7));
+        };
+        img.src = e.target.result;
       };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
+      reader.readAsDataURL(file);
+    });
   }
 
-  function removePhoto() {
-    window._staffPhoto = null;
-    document.getElementById('s-photoInput').value = '';
-    document.getElementById('s-photo-preview').style.display = 'none';
-    document.getElementById('s-photo-remove').style.display = 'none';
+  function handlePhotoCapture(input, idx) {
+    const file = input.files[0];
+    if (!file) return;
+    compressImage(file).then(b64 => {
+      window._staffPhotos[idx] = b64;
+      document.getElementById('s-photo-preview-' + idx).src = b64;
+      document.getElementById('s-photo-wrap-' + idx).style.display = 'block';
+    });
+  }
+
+  function removePhoto(idx) {
+    window._staffPhotos[idx] = null;
+    document.getElementById('s-photoInput-' + idx).value = '';
+    document.getElementById('s-photo-wrap-' + idx).style.display = 'none';
+    document.getElementById('s-photo-preview-' + idx).src = '';
+  }
+
+  function addImageToPDF(doc, b64, yStart) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        const margin = 10;
+        const maxW = 210 - margin * 2, maxH = 297 - yStart - margin;
+        const ratio = img.width / img.height;
+        let w = maxW, h = w / ratio;
+        if (h > maxH) { h = maxH; w = h * ratio; }
+        doc.addImage(b64, 'JPEG', margin, yStart, w, h);
+        resolve();
+      };
+      img.src = b64;
+    });
+  }
+
+  async function buildAndSavePDF(entry, photos) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    doc.setFontSize(13);
+    doc.text(entry.storeName + '  ' + entry.date, 10, 12);
+    let first = true;
+    for (const b64 of photos) {
+      if (!b64) continue;
+      if (!first) doc.addPage();
+      await addImageToPDF(doc, b64, first ? 20 : 10);
+      first = false;
+    }
+    doc.save(entry.storeName + '_' + entry.date + '.pdf');
   }
 
   async function downloadEntryPDF(id) {
@@ -1245,25 +1289,10 @@
     if (!entry) return;
     if (!entry.hasPhoto) { showToast('写真が添付されていません', 'error'); return; }
     showToast('PDF生成中...');
-    const photo = await fbGet('photos/' + id);
-    if (!photo) { showToast('写真の取得に失敗しました', 'error'); return; }
-
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    doc.setFontSize(13);
-    doc.text(entry.storeName + '  ' + entry.date, 10, 12);
-
-    const imgObj = new Image();
-    imgObj.onload = () => {
-      const margin = 10, topOffset = 20;
-      const maxW = 210 - margin * 2, maxH = 297 - topOffset - margin;
-      const ratio = imgObj.width / imgObj.height;
-      let w = maxW, h = w / ratio;
-      if (h > maxH) { h = maxH; w = h * ratio; }
-      doc.addImage(photo, 'JPEG', margin, topOffset, w, h);
-      doc.save(entry.storeName + '_' + entry.date + '.pdf');
-    };
-    imgObj.src = photo;
+    const stored = await fbGet('photos/' + id);
+    if (!stored) { showToast('写真の取得に失敗しました', 'error'); return; }
+    const photos = Array.isArray(stored) ? stored : [stored];
+    await buildAndSavePDF(entry, photos);
   }
 
   function buildEntry(storeName, prefix) {
@@ -1283,7 +1312,7 @@
       tables: numVal(prefix+'tables'),
       people: numVal(prefix+'people'),
       recordedBy: document.getElementById(prefix+'recordedBy').value.trim(),
-      hasPhoto: !!(window._staffPhoto)
+      hasPhoto: window._staffPhotos.some(Boolean)
     };
   }
 
@@ -1296,18 +1325,30 @@
 
     const entry = buildEntry(storeName, 's-');
 
+    const newPhotos = window._staffPhotos.filter(Boolean);
+
     if (editingId !== null) {
       const existing = _cache.sales[editingId] || {};
       entry.id = editingId;
-      entry.hasPhoto = !!(window._staffPhoto) || !!(existing.hasPhoto);
+      entry.hasPhoto = newPhotos.length > 0 || !!(existing.hasPhoto);
       _cache.sales[editingId] = entry;
       fbPut('sales/' + editingId, entry);
-      if (window._staffPhoto) fbPut('photos/' + editingId, window._staffPhoto);
+      if (newPhotos.length > 0) {
+        fbGet('photos/' + editingId).then(prev => {
+          const merged = Array.isArray(prev) ? [...prev] : (prev ? [prev] : []);
+          newPhotos.forEach((p, i) => { if (p) merged[i] = p; });
+          fbPut('photos/' + editingId, merged);
+          buildAndSavePDF(entry, merged);
+        });
+      }
       showToast('✅ 修正しました！', 'success');
     } else {
       _cache.sales[entry.id] = entry;
       fbPut('sales/' + entry.id, entry);
-      if (window._staffPhoto) fbPut('photos/' + entry.id, window._staffPhoto);
+      if (newPhotos.length > 0) {
+        fbPut('photos/' + entry.id, newPhotos);
+        buildAndSavePDF(entry, newPhotos);
+      }
       showToast('✅ 保存しました！', 'success');
     }
 
@@ -1346,16 +1387,21 @@
     document.getElementById('s-save-btn').textContent = '✏️ 修正を保存する';
 
     // 写真プレビュー
-    window._staffPhoto = null;
-    document.getElementById('s-photo-preview').style.display = 'none';
-    document.getElementById('s-photo-remove').style.display = 'none';
+    window._staffPhotos = [null, null];
+    [0, 1].forEach(i => {
+      document.getElementById('s-photo-wrap-' + i).style.display = 'none';
+      document.getElementById('s-photo-preview-' + i).src = '';
+    });
     if (entry.hasPhoto) {
-      document.getElementById('s-photo-remove').style.display = 'inline-block';
-      fbGet('photos/' + id).then(photo => {
-        if (photo) {
-          document.getElementById('s-photo-preview').src = photo;
-          document.getElementById('s-photo-preview').style.display = 'block';
-        }
+      fbGet('photos/' + id).then(stored => {
+        const photos = Array.isArray(stored) ? stored : (stored ? [stored] : []);
+        photos.forEach((b64, i) => {
+          if (b64 && i < 2) {
+            window._staffPhotos[i] = b64;
+            document.getElementById('s-photo-preview-' + i).src = b64;
+            document.getElementById('s-photo-wrap-' + i).style.display = 'block';
+          }
+        });
       });
     }
 
@@ -1379,10 +1425,12 @@
     });
     document.getElementById('s-recordedBy').value = '';
     document.getElementById('s-date').value = new Date().toISOString().split('T')[0];
-    window._staffPhoto = null;
-    document.getElementById('s-photoInput').value = '';
-    document.getElementById('s-photo-preview').style.display = 'none';
-    document.getElementById('s-photo-remove').style.display = 'none';
+    window._staffPhotos = [null, null];
+    [0, 1].forEach(i => {
+      document.getElementById('s-photoInput-' + i).value = '';
+      document.getElementById('s-photo-wrap-' + i).style.display = 'none';
+      document.getElementById('s-photo-preview-' + i).src = '';
+    });
     calcStaffTotals();
   }
 
